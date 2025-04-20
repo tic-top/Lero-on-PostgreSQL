@@ -2,6 +2,58 @@
 
 ## tpch
 
+#!/bin/bash
+
+DB_NAME="tpch_db"
+SCALE_FACTOR=1
+PG_USER="postgres"
+DATA_DIR="./tpch_data"
+REPO_DIR="./tpch-dbgen"
+
+if [ ! -d "$REPO_DIR" ]; then
+    echo "Cloning TPC-H generator..."
+    git clone https://github.com/electrum/tpch-dbgen.git "$REPO_DIR"
+    cd "$REPO_DIR"
+    make -f makefile.suite
+    cd ..
+fi
+
+mkdir -p "$DATA_DIR"
+if [ ! -f "$DATA_DIR/customer.tbl" ]; then
+    echo "Generating TPC-H data (SF=$SCALE_FACTOR)..."
+    cd "$REPO_DIR"
+    ./dbgen -vf -s "$SCALE_FACTOR"
+    
+    mv *.tbl "../$DATA_DIR" 2>/dev/null || echo "No .tbl files to move"
+
+    if [ ! -f "$DATA_DIR/delete.1" ]; then
+        echo "Generating refresh data..."
+        ./dbgen -v -U "$SCALE_FACTOR"
+        mv *.tbl.* "../$DATA_DIR" 2>/dev/null || echo "No refresh files to move"
+    fi
+    cd ..
+fi
+
+echo "Setting up PostgreSQL database..."
+psql -U "$PG_USER" -h localhost -c "DROP DATABASE IF EXISTS $DB_NAME;"
+psql -U "$PG_USER" -h localhost -c "CREATE DATABASE $DB_NAME;"
+
+echo "Creating tables..."
+psql -U "$PG_USER" -h localhost -d "$DB_NAME" -f "$REPO_DIR/dss.ddl"
+
+echo "Loading data..."
+for table in nation region part supplier partsupp customer orders lineitem; do
+    if [ -f "$DATA_DIR/$table.tbl" ]; then
+        echo "  Loading $table..."
+        psql -U "$PG_USER" -h localhost -d "$DB_NAME" -c "\copy $table FROM '$DATA_DIR/$table.tbl' WITH DELIMITER '|' CSV;"
+    else
+        echo "  WARNING: $table.tbl not found in $DATA_DIR!"
+    fi
+done
+
+echo "Adding constraints..."
+psql -U "$PG_USER" -h localhost -d "$DB_NAME" -f "$REPO_DIR/dss.ri"
+
 ## stats
 psql -d 'postgres' -c "DROP DATABASE IF EXISTS stats;"
 psql -d 'postgres' -c "CREATE DATABASE stats;"
