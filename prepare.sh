@@ -8,6 +8,10 @@ psql -d 'postgres' -c "CREATE DATABASE stats;"
 psql -d stats -f stats_db.sql
 
 ## imdb
+
+# https://github.com/gregrahn/join-order-benchmark
+
+
 # This script was intended to get raw IMDB datasets into Postgres
 # The script worked on my mac setup.
 #
