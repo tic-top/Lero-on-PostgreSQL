@@ -12,6 +12,7 @@ from feature import SampleEntity
 from TreeConvolution.tcnn import (BinaryTreeConv, DynamicPooling,
                                   TreeActivation, TreeLayerNorm)
 from TreeConvolution.util import prepare_trees
+from TreeConvolution.ttnn import *
 
 CUDA = torch.cuda.is_available()
 GPU_LIST = [0, 1, 2, 3, 4, 5, 6, 7]
@@ -63,26 +64,36 @@ def right_child(x: SampleEntity):
 
 
 class LeroNet(nn.Module):
-    def __init__(self, input_feature_dim) -> None:
+    def __init__(self, input_feature_dim, type= 'tree_conv') -> None:
         super(LeroNet, self).__init__()
         self.input_feature_dim = input_feature_dim
         self._cuda = False
         self.device = None
 
-        self.tree_conv = nn.Sequential(
-            BinaryTreeConv(self.input_feature_dim, 256),
-            TreeLayerNorm(),
-            TreeActivation(nn.LeakyReLU()),
-            BinaryTreeConv(256, 128),
-            TreeLayerNorm(),
-            TreeActivation(nn.LeakyReLU()),
-            BinaryTreeConv(128, 64),
-            TreeLayerNorm(),
-            DynamicPooling(),
-            nn.Linear(64, 32),
-            nn.LeakyReLU(),
-            nn.Linear(32, 1)
-        )
+        if type == 'tree_conv':
+            self.tree_conv = nn.Sequential(
+                BinaryTreeConv(self.input_feature_dim, 256),
+                TreeLayerNorm(),
+                TreeActivation(nn.LeakyReLU()),
+                BinaryTreeConv(256, 128),
+                TreeLayerNorm(),
+                TreeActivation(nn.LeakyReLU()),
+                BinaryTreeConv(128, 64),
+                TreeLayerNorm(),
+                DynamicPooling(),
+                nn.Linear(64, 32),
+                nn.LeakyReLU(),
+                nn.Linear(32, 1)
+            )
+        else:
+            self.tree_conv = nn.Sequential(
+                TreeTransformer(
+                self.input_feature_dim,
+                64),
+                nn.Linear(64, 32),
+                nn.LeakyReLU(),
+                nn.Linear(32, 1)
+            )  
 
     def forward(self, trees):
         return self.tree_conv(trees)
