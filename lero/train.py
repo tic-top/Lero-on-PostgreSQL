@@ -71,13 +71,14 @@ def compute_rank_score(path, pretrain=False, rank_score_type=0):
     return X, Y
 
 
-def training_pairwise(tuning_model_path, model_name, training_data_file, pretrain=False):
+def training_pairwise(tuning_model_path, model_name, training_data_file, pretrain=False, model_type='tcnn'):
     X1, X2 = _load_pairwise_plans(training_data_file)
 
     tuning_model = tuning_model_path is not None
     lero_model = None
     if tuning_model:
         lero_model = LeroModelPairWise(None)
+        lero_model.set(model_type)
         lero_model.load(tuning_model_path)
         feature_generator = lero_model._feature_generator
     else:
@@ -98,19 +99,21 @@ def training_pairwise(tuning_model_path, model_name, training_data_file, pretrai
     if not tuning_model:
         assert lero_model == None
         lero_model = LeroModelPairWise(feature_generator)
+        lero_model.set(model_type)
     lero_model.fit(X1, X2, Y1, Y2, tuning_model)
 
     print("saving model...")
     lero_model.save(model_name)
 
 
-def training_with_rank_score(tuning_model_path, model_name, training_data_file, pretrain=False, rank_score_type=0):
+def training_with_rank_score(tuning_model_path, model_name, training_data_file, pretrain=False, rank_score_type=0, model_type='tcnn'):
     X, Y = compute_rank_score(training_data_file, pretrain, rank_score_type)
 
     tuning_model = tuning_model_path is not None
     lero_model = None
     if tuning_model:
         lero_model = LeroModel(None)
+        lero_model.set(model_type)
         lero_model.load(tuning_model_path)
         feature_generator = lero_model._feature_generator
     else:
@@ -125,20 +128,21 @@ def training_with_rank_score(tuning_model_path, model_name, training_data_file, 
     if not tuning_model:
         assert lero_model == None
         lero_model = LeroModel(feature_generator)
-
+        lero_model.set(model_type)
     lero_model.fit(local_features, Y, tuning_model)
 
     print("saving model...")
     lero_model.save(model_name)
 
 
-def training_pointwise(tuning_model_path, model_name, training_data_file):
+def training_pointwise(tuning_model_path, model_name, training_data_file, model_type='tcnn'):
     X = _load_pointwise_plans(training_data_file)
 
     tuning_model = tuning_model_path is not None
     lero_model = None
     if tuning_model:
         lero_model = LeroModel(None)
+        lero_model.set(model_type)
         lero_model.load(tuning_model_path)
         feature_generator = lero_model._feature_generator
     else:
@@ -152,6 +156,7 @@ def training_pointwise(tuning_model_path, model_name, training_data_file):
     if not tuning_model:
         assert lero_model == None
         lero_model = LeroModel(feature_generator)
+        lero_model.set(model_type)
 
     lero_model.fit(local_features, y, tuning_model)
 
@@ -168,9 +173,11 @@ if __name__ == "__main__":
     parser.add_argument("--model_name", type=str)
     parser.add_argument("--pretrain_model_name", type=str)
     parser.add_argument("--rank_score_training_type", type=int)
+    parser.add_argument("--model_type", type=str, default='tcnn')
 
     args = parser.parse_args()
 
+    model_type = args.model_type
     training_type = 0
     if args.training_type is not None:
         training_type = args.training_type
@@ -198,22 +205,22 @@ if __name__ == "__main__":
 
     if training_type == 0:
         print("training_pointwise")
-        training_pointwise(pretrain_model_name, model_name, training_data)
+        training_pointwise(pretrain_model_name, model_name, training_data, model_type)
     elif training_type == 1:
         print("training_pairwise")
         training_pairwise(pretrain_model_name, model_name,
-                          training_data, False)
+                          training_data, False, model_type)
     elif training_type == 2:
         print("training_with_rank_score")
         training_with_rank_score(
-            pretrain_model_name, model_name, training_data, False, rank_score_training_type)
+            pretrain_model_name, model_name, training_data, False, rank_score_training_type, model_type)
     elif training_type == 3:
         print("pre-training_pairwise")
         training_pairwise(pretrain_model_name, model_name,
-                          training_data, True)
+                          training_data, True, model_type)
     elif training_type == 4:
         print("pre-training_with_rank_score")
         training_with_rank_score(
-            pretrain_model_name, model_name, training_data, True, rank_score_training_type)
+            pretrain_model_name, model_name, training_data, True, rank_score_training_type, model_type)
     else:
         raise Exception()

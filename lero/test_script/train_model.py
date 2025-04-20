@@ -36,12 +36,13 @@ class PgHelper():
 
 class LeroHelper():
     def __init__(self, queries, query_num_per_chunk, output_query_latency_file, 
-                test_queries, model_prefix, topK) -> None:
+                test_queries, model_prefix, topK, model_type='tcnn') -> None:
         self.queries = queries
         self.query_num_per_chunk = query_num_per_chunk
         self.output_query_latency_file = output_query_latency_file
         self.test_queries = test_queries
         self.model_prefix = model_prefix
+        self.model_type = model_type
         self.topK = topK
         self.lero_server_path = LERO_SERVER_PATH
         self.lero_card_file_path = os.path.join(LERO_SERVER_PATH, LERO_DUMP_CARD_FILE)
@@ -72,9 +73,10 @@ class LeroHelper():
         create_training_file(training_data_file, self.output_query_latency_file, self.output_query_latency_file + "_exploratory")
         print("retrain Lero model:", model_name, "with file", training_data_file)
         
-        cmd_str = "cd " + self.lero_server_path + " && python3.8 train.py" \
+        cmd_str = "cd " + self.lero_server_path + " && python train.py" \
                                                 + " --training_data " + os.path.abspath(training_data_file) \
                                                 + " --model_name " + model_name \
+                                                + " --model_type " + self.model_type \
                                                 + " --training_type 1"
         print("run cmd:", cmd_str)
         os.system(cmd_str)
@@ -214,5 +216,8 @@ if __name__ == "__main__":
             topK = args.topK
         print("topK", topK)
         
-        helper = LeroHelper(queries, query_num_per_chunk, output_query_latency_file, test_queries, model_prefix, topK)
+        if algo == 'lero':
+            helper = LeroHelper(queries, query_num_per_chunk, output_query_latency_file, test_queries, model_prefix, topK, 'tcnn')
+        elif algo == 'ttnn':
+            helper = LeroHelper(queries, query_num_per_chunk, output_query_latency_file, test_queries, model_prefix, topK, 'ttnn')    
         helper.start(pool_num)

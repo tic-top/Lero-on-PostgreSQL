@@ -113,12 +113,16 @@ class LeroModel():
         self._feature_generator = feature_generator
         self._input_feature_dim = None
         self._model_parallel = None
+        self.model_type = None
 
+    def set(self, type: str):
+        self.model_type = type 
+        
     def load(self, path):
         with open(_input_feature_dim_path(path), "rb") as f:
             self._input_feature_dim = joblib.load(f)
 
-        self._net = LeroNet(self._input_feature_dim)
+        self._net = LeroNet(self._input_feature_dim, self.model_type)
         if CUDA:
             self._net.load_state_dict(torch.load(_nn_path(path)))
         else:
@@ -163,8 +167,7 @@ class LeroModel():
             # # determine the initial number of channels
             input_feature_dim = len(X[0].get_feature())
             print("input_feature_dim:", input_feature_dim)
-
-            self._net = LeroNet(input_feature_dim)
+            self._net = LeroNet(input_feature_dim, self.model_type)
             self._input_feature_dim = input_feature_dim
             if CUDA:
                 self._net = self._net.cuda(device)
@@ -247,8 +250,7 @@ class LeroModelPairWise(LeroModel):
         if not pre_training:
             input_feature_dim = len(X1[0].get_feature())
             print("input_feature_dim:", input_feature_dim)
-
-            self._net = LeroNet(input_feature_dim)
+            self._net = LeroNet(input_feature_dim, self.model_type)
             self._input_feature_dim = input_feature_dim
             if CUDA:
                 self._net = self._net.cuda(device)
