@@ -12,7 +12,7 @@ TIMEOUT = 30000000
 # Please ensure this path is correct, 
 # because the program needs to write cardinality files to it 
 # to make the optimizer generate some specific execution plans of each query.
-PG_DB_PATH = "../../data"
+PG_DB_PATH = "/Users/shaylpokle/lero_pgdata"
 
 # Rap conf (No modification is required by default)
 LERO_SERVER_PORT = 14567
