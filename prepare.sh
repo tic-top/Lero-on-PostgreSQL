@@ -1,8 +1,77 @@
 ## tpcds
 
-## tpch
 
-#!/bin/bash
+DB_NAME="tpcds"
+DB_USER="postgres"
+DB_PASSWORD=""
+DATA_DIR="./tpcds-data"
+SCHEMA_FILE="tpcds_schema.sql"
+
+if ! command -v psql &> /dev/null; then
+    echo "PostgreSQL client (psql) not found. Please install it first."
+    exit 1
+fi
+
+if [ ! -d "$DATA_DIR" ]; then
+    echo "Data directory $DATA_DIR not found."
+    exit 1
+fi
+
+echo "Setting up database $DB_NAME..."
+if psql -U "$DB_USER" -lqt | cut -d \| -f 1 | grep -qw "$DB_NAME"; then
+    echo "Database $DB_NAME already exists. Using existing database."
+else
+    createdb -U "$DB_USER" "$DB_NAME" && echo "Database $DB_NAME created."
+fi
+
+echo "Creating tables..."
+if [ -f "$SCHEMA_FILE" ]; then
+    psql -U "$DB_USER" -d "$DB_NAME" -f "$SCHEMA_FILE"
+else
+    echo "ERROR: Schema file $SCHEMA_FILE not found."
+    exit 1
+fi
+
+load_data() {
+    local table_name=$1
+    local data_file="$DATA_DIR/$table_name.dat"
+    
+    if [ ! -f "$data_file" ]; then
+        echo "Warning: Data file $data_file not found. Skipping $table_name."
+        return
+    fi
+    
+    echo "Loading data into $table_name..."
+    sed -i '' 's/|$//' "$data_file"
+    psql -U "$DB_USER" -d "$DB_NAME" -c "\copy $table_name FROM '$data_file' WITH DELIMITER '|' NULL ''"
+}
+
+echo "Starting data loading process..."
+load_data call_center
+load_data catalog_page
+load_data catalog_returns
+load_data customer
+load_data customer_address
+load_data customer_demographics
+load_data date_dim
+load_data dbgen_version
+load_data household_demographics
+load_data income_band
+load_data item
+load_data promotion
+load_data reason
+load_data ship_mode
+load_data store
+load_data store_returns
+load_data time_dim
+load_data warehouse
+load_data web_page
+load_data web_returns
+load_data web_site
+
+echo "Data loading process completed!"
+
+## tpch
 
 DB_NAME="tpch_db"
 SCALE_FACTOR=1
