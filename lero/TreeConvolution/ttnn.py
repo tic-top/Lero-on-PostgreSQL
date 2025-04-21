@@ -1,6 +1,96 @@
 import torch
 import torch.nn as nn
 
+class FeedForwardNetwork(nn.Module):
+    def __init__(self, hidden_size, ffn_size, dropout_rate):
+        super(FeedForwardNetwork, self).__init__()
+
+        self.layer1 = nn.Linear(hidden_size, ffn_size)
+        self.gelu = nn.GELU()
+        self.layer2 = nn.Linear(ffn_size, hidden_size)
+
+    def forward(self, x):
+        x = self.layer1(x)
+        x = self.gelu(x)
+        x = self.layer2(x)
+        return x
+
+
+class MultiHeadAttention(nn.Module):
+    def __init__(self, hidden_size, attention_dropout_rate, head_size):
+        super(MultiHeadAttention, self).__init__()
+
+        self.head_size = head_size
+
+        self.att_size = att_size = hidden_size // head_size
+        self.scale = att_size ** -0.5
+
+        self.linear_q = nn.Linear(hidden_size, head_size * att_size)
+        self.linear_k = nn.Linear(hidden_size, head_size * att_size)
+        self.linear_v = nn.Linear(hidden_size, head_size * att_size)
+        self.att_dropout = nn.Dropout(attention_dropout_rate)
+
+        self.output_layer = nn.Linear(head_size * att_size, hidden_size)
+
+    def forward(self, q, k, v, attn_bias=None):
+        orig_q_size = q.size()
+
+        d_k = self.att_size
+        d_v = self.att_size
+        batch_size = q.size(0)
+
+        # head_i = Attention(Q(W^Q)_i, K(W^K)_i, V(W^V)_i)
+        q = self.linear_q(q).view(batch_size, -1, self.head_size, d_k)
+        k = self.linear_k(k).view(batch_size, -1, self.head_size, d_k)
+        v = self.linear_v(v).view(batch_size, -1, self.head_size, d_v)
+
+        q = q.transpose(1, 2)                  # [b, h, q_len, d_k]
+        v = v.transpose(1, 2)                  # [b, h, v_len, d_v]
+        k = k.transpose(1, 2).transpose(2, 3)  # [b, h, d_k, k_len]
+
+        # Scaled Dot-Product Attention.
+        # Attention(Q, K, V) = softmax((QK^T)/sqrt(d_k))V
+        q = q * self.scale
+        x = torch.matmul(q, k)  # [b, h, q_len, k_len]
+        if attn_bias is not None:
+            x = x + attn_bias
+
+        x = torch.softmax(x, dim=3)
+        x = self.att_dropout(x)
+        x = x.matmul(v)  # [b, h, q_len, attn]
+
+        x = x.transpose(1, 2).contiguous()  # [b, q_len, h, attn]
+        x = x.view(batch_size, -1, self.head_size * d_v)
+
+        x = self.output_layer(x)
+
+        assert x.size() == orig_q_size
+        return x
+
+class EncoderLayer(nn.Module):
+    def __init__(self, hidden_size, ffn_size, dropout_rate, attention_dropout_rate, head_size):
+        super(EncoderLayer, self).__init__()
+
+        self.self_attention_norm = nn.LayerNorm(hidden_size)
+        self.self_attention = MultiHeadAttention(hidden_size, attention_dropout_rate, head_size)
+        self.self_attention_dropout = nn.Dropout(dropout_rate)
+
+        self.ffn_norm = nn.LayerNorm(hidden_size)
+        self.ffn = FeedForwardNetwork(hidden_size, ffn_size, dropout_rate)
+        self.ffn_dropout = nn.Dropout(dropout_rate)
+
+    def forward(self, x, attn_bias=None):
+        y = self.self_attention_norm(x)
+        y = self.self_attention(y, y, y, attn_bias)
+        y = self.self_attention_dropout(y)
+        x = x + y
+
+        y = self.ffn_norm(x)
+        y = self.ffn(y)
+        y = self.ffn_dropout(y)
+        x = x + y
+        return x
+
 class TreeTransformer(nn.Module):
     def __init__(self, in_channels, out_channels,
                  nhead=1, num_layers=4, dim_feedforward=None):
@@ -10,13 +100,8 @@ class TreeTransformer(nn.Module):
         dim_feedforward = dim_feedforward or 4 * in_channels
 
         # TransformerEncoder: 每层 d_model=in_channels，nhead 头
-        encoder_layer = nn.TransformerEncoderLayer(
-            d_model=in_channels,
-            nhead=nhead,
-            dim_feedforward=dim_feedforward,
-            batch_first=False  # 我们用 (seq, batch, dim) 这个格式
-        )
-        self.encoder = nn.TransformerEncoder(encoder_layer, num_layers=num_layers)
+        self.encoder_layers = [EncoderLayer(in_channels,2*in_channels, 0.01, 0.01, nhead)
+                    for _ in range(num_layers)]
 
         # 最后把 d_model 映射到 out_channels
         self.out_proj = nn.Linear(in_channels, out_channels)
@@ -42,22 +127,11 @@ class TreeTransformer(nn.Module):
         src = trees.permute(2, 0, 1)
 
         # 3) 逐样本跑 encoder，利用各自的 attn_mask
-        outs = []
-        for b in range(B):
-            # attn_mask[b]: (T, T)，True 表示屏蔽
-            out_b = self.encoder(src[:, b : b + 1, :], mask=attn_masks[b])
-            # out_b: (T, 1, C) -> (T, C)
-            outs.append(out_b.squeeze(1))
-        # 拼回 (T, B, C)
-        out = torch.stack(outs, dim=1)
-
-        # 4) 投影到 out_channels
-        #    out: (T, B, C) -> (B, T, C)
-        out = out.permute(1, 0, 2)
-        # 再做线性层 (B, T, C_in) -> (B, T, out_channels)
-        out = self.out_proj(out)
-        # 最终转成 (B, out_channels, T)
-        results = out.permute(0, 2, 1)
+        for enc in self.encoder_layers:
+            src = enc(src, attn_masks)
+        src = src.permute(1, 0, 2)
+        src = self.out_proj(src)
+        results = src.permute(0, 2, 1)
 
         return results[:,:,0]
     
