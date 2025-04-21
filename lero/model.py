@@ -113,8 +113,7 @@ class LeroModel():
         self._feature_generator = feature_generator
         self._input_feature_dim = None
         self._model_parallel = None
-        self.model_type = None
-
+        self.model_type = 'tree_conv'
     def set(self, type: str):
         self.model_type = type 
         
