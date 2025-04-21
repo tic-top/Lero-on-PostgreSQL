@@ -138,34 +138,31 @@ class TreeTransformer(nn.Module):
 
 def build_tree_attention_mask(idxes, seq_len):
     """
-    idxes: LongTensor of shape (B, M, 1), 每组三元组按[ parent, left, right ] 编号，叶子处会有 0。
-    seq_len: int, 序列总长度 T（flat_trees 的第二维）
-    返回: attn_mask of shape (B, T, T), dtype=torch.bool，True 表示“屏蔽”。
+    idxes: LongTensor of shape (B, M, 1), M 为 3 * n_nodes，每组 3 个值按 [parent, left, right] 编号，
+           节点 0 是占位（根之前），真实节点位置是 1..n_nodes。
+    返回: attn_mask of shape (B, n_nodes+1, n_nodes+1), dtype=torch.bool，
+          True 表示“屏蔽”，False 表示“可 attend”。
     """
-    B, M1, _ = idxes.shape
-    # 先把 M1 = 3 * n_nodes 展平回 (B, n_nodes, 3)
-    n_nodes = M1 // 3
-    triples = idxes.view(B, n_nodes, 3)  # (B, n_nodes, 3)
+    B, M, _ = idxes.shape
+    assert M % 3 == 0, "idxes 的第二维必须是 3 的倍数"
+    n_nodes = M // 3
+    triples = idxes.view(B, n_nodes, 3)   # (B, n_nodes, 3)
+    seq_len = n_nodes + 1                 # 包含 0 号占位
 
-    # 初始化允许 attention 的关系矩阵（默认只允许自身 attend 自身）
-    A = torch.eye(seq_len, dtype=torch.bool, device=idxes.device).unsqueeze(0).expand(B, -1, -1)
+    # 初始化全屏蔽
+    mask = -100 * torch.ones(B, seq_len, seq_len, device=idxes.device)
+    # 允许每个 token attend 自己
+    ids = torch.arange(seq_len, device=idxes.device)
+    mask[:, ids, ids] = 0
 
+    # 遍历 parent/left/right，双方互通
     for b in range(B):
         for i in range(n_nodes):
             p, l, r = triples[b, i].tolist()
-            # 这里 i 对应的是序号 i+1，因为 0 号是那个全零占位
-            pos = i + 1  
-            # 自己肯定能 attend 自己（上面已 init），下面补 parent/child 关系
-            if p > 0:
-                A[b, pos, p] = True
-                A[b, p, pos] = True
-            if l > 0:
-                A[b, pos, l] = True
-                A[b, l, pos] = True
-            if r > 0:
-                A[b, pos, r] = True
-                A[b, r, pos] = True
+            pos = i + 1  # 真正的序号
+            for rel in (p, l, r):
+                if rel > 0:
+                    mask[b, pos, rel] = 0
+                    mask[b, rel, pos] = 0
 
-    # Transformer 需要的 attn_mask: True 表示“屏蔽”，False 表示“可 attend”
-    attn_mask = ~A  # (B, T, T)
-    return attn_mask
+    return mask
