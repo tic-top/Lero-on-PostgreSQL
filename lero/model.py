@@ -71,6 +71,7 @@ class LeroNet(nn.Module):
         self.device = None
 
         if type == 'tree_conv':
+            print("RUNNING123 TREECONV")
             self.tree_conv = nn.Sequential(
                 BinaryTreeConv(self.input_feature_dim, 256),
                 TreeLayerNorm(),
@@ -86,10 +87,12 @@ class LeroNet(nn.Module):
                 nn.Linear(32, 1)
             )
         else:
+            print("RUNNING123 TREETRANSFORMER")
             self.tree_conv = nn.Sequential(
                 TreeTransformer(
                 self.input_feature_dim,
-                64),
+                64,
+                num_layers=1),
                 nn.Linear(64, 32),
                 nn.LeakyReLU(),
                 nn.Linear(32, 1)

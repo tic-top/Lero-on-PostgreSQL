@@ -8,3 +8,5 @@ lero/dump_card_with_score.txt
 __pycache__
 .ipynb*
 lero/test_script/*log*
+lero/test_script/config.py
+lero/server.conf

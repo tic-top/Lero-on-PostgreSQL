@@ -181,7 +181,7 @@ if __name__ == "__main__":
         pool_num = args.pool_num
     print("pool_num:", pool_num)
 
-    ALGO_LIST = ["lero", "pg"]
+    ALGO_LIST = ["lero", "pg", 'ttnn']
     algo = "lero"
     if args.algo:
         assert args.algo.lower() in ALGO_LIST
@@ -217,7 +217,7 @@ if __name__ == "__main__":
         print("topK", topK)
         
         if algo == 'lero':
-            helper = LeroHelper(queries, query_num_per_chunk, output_query_latency_file, test_queries, model_prefix, topK, 'tcnn')
+            helper = LeroHelper(queries, query_num_per_chunk, output_query_latency_file, test_queries, model_prefix, topK, model_type='tcnn')
         elif algo == 'ttnn':
-            helper = LeroHelper(queries, query_num_per_chunk, output_query_latency_file, test_queries, model_prefix, topK, 'ttnn')    
+            helper = LeroHelper(queries, query_num_per_chunk, output_query_latency_file, test_queries, model_prefix, topK, model_type='ttnn')    
         helper.start(pool_num)
