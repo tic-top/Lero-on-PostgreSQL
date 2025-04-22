@@ -90,27 +90,23 @@ class TreeTransformer(nn.Module):
     def forward(self, flat_data):
         """
         flat_data: (trees, idxes)
-          trees: Tensor of shape (B, in_channels, T)
+          trees: Tensor of shape (B, in_channels, 1 + n_nodes)
           idxes: LongTensor of shape (B, 3*n_nodes, 1)
         Returns:
           Tensor of shape (B, out_channels, T)
         """
         trees, idxes = flat_data
         B, C, T = trees.shape
-        # build additive attention bias: (B, 1, T, T)
         attn_bias = build_tree_attention_mask(idxes)
 
         # prepare input for transformer: (B, T, hidden_size)
         x = trees.permute(0, 2, 1).contiguous()
 
-        # pass through encoder layers
         for layer in self.encoder_layers:
             x = layer(x, attn_bias)
 
-        # project to out_channels: (B, T, out_channels)
         x = self.out_proj(x)
-        # reorder back to (B, out_channels, T)
-        return x.permute(0, 2, 1).contiguous()
+        return x[:, 0]
 
 
 def build_tree_attention_mask(idxes):
