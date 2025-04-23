@@ -9,4 +9,6 @@ __pycache__
 .ipynb*
 lero/test_script/*log*
 lero/test_script/config.py
-lero/server.conf
+lero/server.conftpch-dbgen/
+tpcds-data/
+tpch-dbgen/
